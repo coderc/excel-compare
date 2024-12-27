@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Excel文件对比工具</title>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .file-inputs {
+            margin-bottom: 20px;
+        }
+        .diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .diff-table th, .diff-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .diff-table th {
+            background-color: #f4f4f4;
+        }
+        .different {
+            background-color: #ffd7d7;
+        }
+        .modified {
+            background-color: #e1f0ff;
+        }
+        .added {
+            background-color: #e6ffe6;
+        }
+        .deleted {
+            background-color: #ffe6e6;
+        }
+        .sheet-select {
+            margin: 10px 0;
+        }
+        .tabs {
+            margin-top: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab-button {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            background-color: #f8f8f8;
+            cursor: pointer;
+            margin-right: 4px;
+        }
+        .tab-button.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px 0;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .no-diff {
+            color: green;
+            padding: 10px;
+        }
+        .preview-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .preview-content {
+            position: relative;
+            background-color: white;
+            margin: 50px auto;
+            padding: 20px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 5px;
+        }
+        
+        .preview-buttons {
+            position: sticky;
+            bottom: 0;
+            background-color: white;
+            padding: 10px 0;
+            border-top: 1px solid #ddd;
+            text-align: right;
+        }
+        
+        .preview-close {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        
+        .diff-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            min-width: 100px;
+        }
+        
+        .diff-table input[type="checkbox"] {
+            margin: 0 8px;
+        }
+        
+        /* 分隔列样式 */
+        .diff-table .separator {
+            width: 50px;
+            padding: 0;
+            min-width: 50px;
+            background: linear-gradient(to right, #4CAF50, #2196F3);
+            border: none;
+            opacity: 0.6;
+        }
+        
+        /* 按钮基础样式 */
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        /* 主要按钮样式（比较文件、确认导出等） */
+        button.primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        button.primary:hover {
+            background-color: #45a049;
+        }
+        
+        /* 次要按钮样式（取消等） */
+        button.secondary {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+        
+        button.secondary:hover {
+            background-color: #e9ecef;
+        }
+        
+        /* 文件输入区域样式 */
+        .file-inputs {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .file-inputs > div {
+            margin-bottom: 15px;
+        }
+        
+        .file-inputs label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        
+        .file-inputs input[type="file"] {
+            display: none; /* 隐藏原始的文件输入框 */
+        }
+        
+        /* 自定义文件选择按钮样式 */
+        .file-select-button {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #333;
+        }
+        
+        .file-select-button:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* 文件名显示区域 */
+        .file-name {
+            margin-left: 10px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        /* 差异导航样式 */
+        .diff-nav {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1000;
+        }
+        
+        .diff-nav button {
+            padding: 12px;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .diff-nav button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .highlight-diff {
+            animation: highlight 1.5s;
+        }
+        
+        @keyframes highlight {
+            0% { background-color: #ffeb3b; }
+            100% { background-color: inherit; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Excel文件对比工具</h1>
+        <div class="file-inputs">
+            <div>
+                <label>Source文件：</label>
+                <input type="file" id="file1" accept=".xlsx,.xls" onchange="updateFileName(this, 'fileName1')">
+                <label for="file1" class="file-select-button">选择文件</label>
+                <span id="fileName1" class="file-name">未选择文件</span>
+            </div>
+            <div>
+                <label>Incoming文件：</label>
+                <input type="file" id="file2" accept=".xlsx,.xls" onchange="updateFileName(this, 'fileName2')">
+                <label for="file2" class="file-select-button">选择文件</label>
+                <span id="fileName2" class="file-name">未选择文件</span>
+            </div>
+            <button class="primary" onclick="compareFiles()">比较文件</button>
+            <button class="primary" onclick="mergeDiff()" style="margin-left: 20px;">导出合并文件</button>
+        </div>
+
+        <div id="tabs" class="tabs"></div>
+        <div id="tab-contents"></div>
+    </div>
+    <div id="previewModal" class="preview-modal">
+        <div class="preview-content">
+            <span class="preview-close" onclick="closePreview()">&times;</span>
+            <h2>预览合并结果</h2>
+            <div id="previewContent"></div>
+            <div class="preview-buttons">
+                <button class="secondary" onclick="closePreview()">取消</button>
+                <button class="primary" onclick="confirmExport()">确认导出</button>
+            </div>
+        </div>
+    </div>
+    <div class="diff-nav">
+        <button class="primary" onclick="jumpToNextDiff()" title="跳转到下一处差异">
+            ↓
+        </button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
